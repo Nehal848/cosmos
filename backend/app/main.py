@@ -32,6 +32,17 @@ app.include_router(opportunities.router)
 app.include_router(assistant.router)
 
 
+@app.get("/")
+def root():
+    """Root endpoint welcoming visitors and linking to documentation."""
+    return {
+        "message": "Welcome to COSMOS API",
+        "docs": "/docs",
+        "health": "/health",
+        "stats": "/stats",
+    }
+
+
 @app.get("/health")
 def health():
     """Hosts call this to check the API is alive."""
