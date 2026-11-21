@@ -3,11 +3,16 @@ Local:   uvicorn app.main:app --reload --port 8020
 Server:  uvicorn app.main:app --host 0.0.0.0 --port $PORT
 """
 import os
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app import assistant, graph, opportunities, papers_api, recommend, search, trends
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # Websites allowed to call this API. On a server, set COSMOS_CORS_ORIGINS to your site's
 # address(es), comma-separated, e.g. "https://my-cosmos.example".
@@ -23,6 +28,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if (STATIC_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+
+@app.middleware("http")
+async def spa_middleware(request: Request, call_next):
+    accept = request.headers.get("accept", "")
+    path = request.url.path
+    if (
+        request.method == "GET"
+        and "text/html" in accept
+        and not path.startswith(("/docs", "/openapi.json", "/redoc"))
+        and STATIC_DIR.exists()
+        and (STATIC_DIR / "index.html").is_file()
+    ):
+        rel_path = path.lstrip("/")
+        if rel_path and (STATIC_DIR / rel_path).is_file():
+            return FileResponse(STATIC_DIR / rel_path)
+        return FileResponse(STATIC_DIR / "index.html")
+    return await call_next(request)
+
+
 app.include_router(papers_api.router)
 app.include_router(search.router)
 app.include_router(recommend.router)
@@ -32,9 +59,18 @@ app.include_router(opportunities.router)
 app.include_router(assistant.router)
 
 
+@app.get("/vite.svg", include_in_schema=False)
+def vite_svg():
+    svg_path = STATIC_DIR / "vite.svg"
+    if svg_path.is_file():
+        return FileResponse(svg_path)
+
+
 @app.get("/")
 def root():
-    """Root endpoint welcoming visitors and linking to documentation."""
+    """Serves the frontend application if built, or API status info."""
+    if STATIC_DIR.exists() and (STATIC_DIR / "index.html").is_file():
+        return FileResponse(STATIC_DIR / "index.html")
     return {
         "message": "Welcome to COSMOS API",
         "docs": "/docs",
