@@ -12,7 +12,16 @@ from fastapi.staticfiles import StaticFiles
 
 from app import assistant, graph, opportunities, papers_api, recommend, search, trends
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+STATIC_CANDIDATES = [
+    Path(__file__).resolve().parent / "static",
+    Path(__file__).resolve().parent.parent / "static",
+    Path("static"),
+    Path("backend/static"),
+]
+STATIC_DIR = next(
+    (c for c in STATIC_CANDIDATES if c.exists() and (c / "index.html").is_file()),
+    Path(__file__).resolve().parent / "static",
+)
 
 # Websites allowed to call this API. On a server, set COSMOS_CORS_ORIGINS to your site's
 # address(es), comma-separated, e.g. "https://my-cosmos.example".
@@ -57,6 +66,19 @@ app.include_router(graph.router)
 app.include_router(trends.router)
 app.include_router(opportunities.router)
 app.include_router(assistant.router)
+
+
+@app.get("/debug_static", include_in_schema=False)
+def debug_static():
+    return {
+        "file": str(Path(__file__).resolve()),
+        "cwd": str(Path.cwd()),
+        "static_dir": str(STATIC_DIR),
+        "static_dir_exists": STATIC_DIR.exists(),
+        "has_index": (STATIC_DIR / "index.html").is_file() if STATIC_DIR.exists() else False,
+        "files_in_cwd": [p.name for p in Path.cwd().iterdir()] if Path.cwd().exists() else [],
+        "files_in_parent": [p.name for p in Path(__file__).resolve().parent.iterdir()] if Path(__file__).resolve().parent.exists() else [],
+    }
 
 
 @app.get("/vite.svg", include_in_schema=False)
